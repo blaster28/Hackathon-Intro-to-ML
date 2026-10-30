@@ -1,0 +1,10 @@
+# Kaggle competition data: not redistributed
+train.csv
+test.csv
+sample_submission.csv
+# Course material
+hackathon_briefing_EN.pdf
+# Old draft
+pipeline.py
+__pycache__/
+.ipynb_checkpoints/
