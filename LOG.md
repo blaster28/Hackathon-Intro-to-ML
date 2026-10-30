@@ -128,7 +128,7 @@ Confirmed limitations (none is a validation leak: CV and public scores stay hone
 
 Refuted by the skeptics: test-internal duplicate clusters split by a quota cut (<= 3 rows, ~0 effect); "quota rule overstated" (the rule is supported by the data: aggregate easy-hard imbalance of the r = 2 groups matches (k, k+1, k+1), not the alternative).
 
-## Confusion matrix, model v4 (HistGradientBoosting + v4 features + ordinal assignment, out-of-fold, seed 0, from the notebook)
+## Gate 2: confusion matrix of the final model v4 (HistGradientBoosting + v4 features + ordinal assignment, out-of-fold 5-fold CV, seed 0, printed by team_notebook_v4_commented.ipynb)
 
 | | predicted easy | predicted moderate | predicted hard |
 | --- | --- | --- | --- |
