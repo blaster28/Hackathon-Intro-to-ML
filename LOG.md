@@ -7,6 +7,8 @@ One line per Kaggle submission. Fill it **before** you look at the score, except
 | 15:35 | 8PPQ | HistGradientBoosting + features relatives par (user, sport) + moyenne OOF imbriquée des étiquettes voisines (±0/1/3/12 mois) + copie des doublons + quotas de terciles par groupe | La cible est un tercile par (user, sport) calculé sur train+test : on prédit un classement relatif puis on le coupe aux quotas restants | 0.605 (5-fold ; LogReg 0.563, RF 0.600) | 0.604 |
 | 16:09 | 8PPQ | + voisins à vitesse proche (noyau gaussien sur le rang de vitesse, OOF) + corrélation de Spearman étiquette~vitesse et étiquette~dénivelé par (user, sport), OOF | À vitesse égale, la difficulté dépend de ce que la même personne a ressenti à des vitesses proches, et le lien vitesse→difficulté varie d'une personne à l'autre | 0.608 (seed 0 ; seeds 1-3 : 0.6067 ± 0.0005 vs 0.6017 pour la référence) | 0.622 |
 
+Hint 1 (16:20, noted 16:30): already used since v1 (15:35): relative features per user × sport (percentile rank and z-score of each workout within that person's workouts in that sport). Hints 2 and 3 not bought.
+
 ## Model comparison (5-fold CV, macro-F1)
 
 | Model | Brut | + doublons | + doublons + quotas |
@@ -67,6 +69,20 @@ Same protocol (nested OOF for everything that uses labels, duplicates then quota
 | extra | 1a + 2 together (outside the protocol, chosen after seeing the results) | 0.6074 / 0.6067 / 0.6061 | 0.6067 ± 0.0005 | +0.0050 | **yes, team decision**: gain on all 3 seeds, but chosen after the fact, so check it against the public score |
 
 Also checked: workout_id is shuffled within each user (median Spearman with date 0.004), so it carries no chronological information.
+
+## Round 3
+
+Protocole : `experiments.py` (team_pipeline.py n'est pas modifié pendant les tests), CV 5-fold StratifiedKFold, moyenne ± écart-type sur les seeds 1, 2, 3. OOF imbriqué pour tout ce qui utilise des étiquettes. En CV, les quotas n'utilisent que les étiquettes du fold d'entraînement. Score = macro-F1 après doublons + quotas. Règle : on garde une idée seulement si le gain moyen est ≥ +0.003 ET positif sur chacune des 3 seeds. Les idées gardées s'empilent dans l'ordre, et chaque idée a au plus 2 variantes, fixées avant de voir les résultats.
+
+### Phase 0 : analyse
+
+- **0a. Règle des quotas.** Quand N n'est pas un multiple de 3, quelle classe reçoit les séances en plus ? On a comparé la vraisemblance des comptes du train sous chaque règle. N mod 3 = 1 (57 groupes) : seule « hard reçoit l'extra » est compatible avec tous les groupes (log-vraisemblance −217.5, contre −219.2 et −221.1 pour easy et moderate, chacune impossible dans 1 groupe). N mod 3 = 2 (62 groupes) : seule « moderate + hard » est compatible (−248.9, contre −252.0 pour easy+hard, impossible dans 1 groupe, et −254.7 pour easy+moderate). Conclusion : les extras vont aux classes du haut, ce qui est compatible avec une règle déterministe (un découpage du classement en partant du haut).
+- **0b. Erreurs OOF de la référence (seed 1, macro-F1 0.6074).**
+  - Par taille de groupe : macro-F1 de 0.53 à 0.56 pour les groupes de ≤ 120 séances, 0.60 pour 121–300, 0.64 pour > 300. Les erreurs easy↔hard passent de 9 % (petits groupes) à 4 % (grands groupes).
+  - Par sport : cycling 0.62, running 0.61, commute 0.55, mtb 0.51, orienteering 0.48, walking 0.45.
+  - Lecture : l'erreur vient surtout des petits groupes et des sports rares, où les features relatives et les voisins sont estimés sur peu de séances.
+- **Doublons et quasi-doublons.** 115 lignes du test appartiennent à un ensemble de lignes test identiques. Quasi-doublons (même user, sport, année, mois, jour, heure, et les 4 mesures à ±1 %) : 211 paires, dont 115 entièrement dans le train, avec 92.2 % d'accord des étiquettes (> 90 %), donc l'idée 4 est testée.
+- **Idées écartées par les règles du hackathon.** 15 (LightGBM lambdarank) et 18 (CatBoost ou LightGBM) : seuls les modèles scikit-learn sont autorisés, LightGBM et CatBoost ne sont pas dans scikit-learn. L'idée 18 est remplacée par une moyenne HGB + ExtraTrees (scikit-learn). L'affectation optimale (idée 1) est codée en numpy, sans scipy.
 
 ## Confusion matrix, model v2 (HistGradientBoosting + speed-kernel neighbours + per-group correlations, out-of-fold, seed 0)
 
