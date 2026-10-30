@@ -5,7 +5,7 @@ One line per Kaggle submission. Fill it **before** you look at the score, except
 | Time | Who (codes) | What changed | Why we expect it to help | Validation macro-F1 | Public score |
 | --- | --- | --- | --- | --- | --- |
 | 15:35 | 8PPQ | HistGradientBoosting + features relatives par (user, sport) + moyenne OOF imbriquée des étiquettes voisines (±0/1/3/12 mois) + copie des doublons + quotas de terciles par groupe | La cible est un tercile par (user, sport) calculé sur train+test : on prédit un classement relatif puis on le coupe aux quotas restants | 0.605 (5-fold ; LogReg 0.563, RF 0.600) | 0.604 |
-|  | 8PPQ | + voisins à vitesse proche (noyau gaussien sur le rang de vitesse, OOF) + corrélation de Spearman étiquette~vitesse et étiquette~dénivelé par (user, sport), OOF | À vitesse égale, la difficulté dépend de ce que la même personne a ressenti à des vitesses proches, et le lien vitesse→difficulté varie d'une personne à l'autre | 0.608 (seed 0 ; seeds 1-3 : 0.6067 ± 0.0005 vs 0.6017 pour la référence) |  |
+| 16:09 | 8PPQ | + voisins à vitesse proche (noyau gaussien sur le rang de vitesse, OOF) + corrélation de Spearman étiquette~vitesse et étiquette~dénivelé par (user, sport), OOF | À vitesse égale, la difficulté dépend de ce que la même personne a ressenti à des vitesses proches, et le lien vitesse→difficulté varie d'une personne à l'autre | 0.608 (seed 0 ; seeds 1-3 : 0.6067 ± 0.0005 vs 0.6017 pour la référence) | 0.622 |
 
 ## Model comparison (5-fold CV, macro-F1)
 
