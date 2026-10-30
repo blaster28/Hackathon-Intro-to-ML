@@ -114,6 +114,20 @@ Reading after rounds 1-3: the model ranks sessions inside a group about as well 
 | 16 | New label-neighbour features (nested OOF): k-NN (k=5, 15) in the group's standardised feature space (z of speed, duration, gain, max speed, speed std) + mean distance; kernel-weighted residual (label − 2·speed rank) over time and over speed; label trend (ridge slope vs month, previous-3 vs next-3 months) | 0.6132 / 0.6168 / 0.6118 (seeds 4-5: 0.6118 / 0.6165) | 0.6139 | +0.0050 (+0.0035 over 5 seeds) | 5/5 | **yes** |
 | 17 | 2-seed averaging + ordinal assignment together (agent cross-check) | 0.6136 / 0.6147 / 0.6115 | 0.6132 | +0.0043 | 3/3 | effects roughly additive |
 
+## Audit (17:30-17:45): adversarial review of the pipeline by 3 reviewers + 1 skeptic per finding
+
+Checked and found correct: all label-based features read only fit-fold labels; apply and fit rows are disjoint everywhere; duplicate copies come only from known rows; quota counts never double-count; target_counts matches every one of the 193 groups (max excess 0); the CV protocol mirrors the test situation (quotas shared between validation and test rows); only scikit-learn estimators (LogisticRegression, RandomForest, HistGradientBoosting, VotingClassifier), no external data, seeds fixed, submission format valid.
+
+Confirmed limitations (none is a validation leak: CV and public scores stay honest):
+
+| # | Finding | Effect | Action |
+| --- | --- | --- | --- |
+| A1 | 505 exact-duplicate pairs in train (503 single-label); the inner KFold of oof_label_features does not keep twins in the same fold, so ~4.7 % of training rows get their twin's label inside their own kern_mean / nb0_mean (shift 0.02-0.04 on the 0-2 scale) | small train/apply mismatch, expected 0 to +0.003 if fixed | v5 = GroupKFold by duplicate cluster (612 clusters, 1256 train rows) tested on seeds 1-3: 0.6171 / 0.6168 / 0.6188 = 0.6176 vs v4 0.6187 (-0.0011, worse on 2 of 3 seeds) -> **rejected, v4 stays final** |
+| A2 | Training rows see 4/5 of the known labels (inner OOF), prediction rows 100 %: count features nb*_n, kern_w are ~1.25x larger at prediction; smoothed means move < 1 % | CV reproduces the same shift, so honest; effect on F1 unmeasured, likely small | documented in the notebook; fix (fold-averaged apply features) not tried for lack of time |
+| A3 | HGB early stopping is on automatically (> 10 000 rows): 10 % of the fit rows held out, max_iter = 400 is a ceiling; the notebook did not say so | none on score; explanation accuracy | sentence added in the notebook |
+
+Refuted by the skeptics: test-internal duplicate clusters split by a quota cut (<= 3 rows, ~0 effect); "quota rule overstated" (the rule is supported by the data: aggregate easy-hard imbalance of the r = 2 groups matches (k, k+1, k+1), not the alternative).
+
 ## Confusion matrix, model v4 (HistGradientBoosting + v4 features + ordinal assignment, out-of-fold, seed 0, from the notebook)
 
 | | predicted easy | predicted moderate | predicted hard |
