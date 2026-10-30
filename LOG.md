@@ -1,4 +1,4 @@
-# Submission log, team ____
+# Submission log, Team_14
 
 One line per Kaggle submission. Fill it **before** you look at the score, except the last column.
 
@@ -6,6 +6,8 @@ One line per Kaggle submission. Fill it **before** you look at the score, except
 | --- | --- | --- | --- | --- | --- |
 | 15:35 | 8PPQ | HistGradientBoosting + features relatives par (user, sport) + moyenne OOF imbriquée des étiquettes voisines (±0/1/3/12 mois) + copie des doublons + quotas de terciles par groupe | La cible est un tercile par (user, sport) calculé sur train+test : on prédit un classement relatif puis on le coupe aux quotas restants | 0.605 (5-fold ; LogReg 0.563, RF 0.600) | 0.604 |
 | 16:09 | 8PPQ | + voisins à vitesse proche (noyau gaussien sur le rang de vitesse, OOF) + corrélation de Spearman étiquette~vitesse et étiquette~dénivelé par (user, sport), OOF | À vitesse égale, la difficulté dépend de ce que la même personne a ressenti à des vitesses proches, et le lien vitesse→difficulté varie d'une personne à l'autre | 0.608 (seed 0 ; seeds 1-3 : 0.6067 ± 0.0005 vs 0.6017 pour la référence) | 0.622 |
+| __:__ | | v3 = v2 + copie des étiquettes des quasi-doublons stricts (même créneau user/sport/année/mois/jour/heure, 4 mesures à ±1 % ; 71 lignes du test) + règle exacte des quotas (N = 3k+1 → l'extra va à hard ; 3k+2 → moderate et hard). Modèle inchangé. | Dans le train, 91 % de ces quasi-doublons ont la même étiquette ; les comptes du train montrent que l'extra va aux classes du haut | 0.6089 (seeds 1-3, vs 0.6071 ; positif sur les 3) | 0.623 |
+| __:__ | | v4 = v3 + 16 nouvelles features de voisinage (k-NN dans l'espace standardisé du groupe, résidus label − 2·rang de vitesse pondérés en temps et en vitesse, tendance du label dans le temps), toutes en OOF imbriqué + moyenne de 5 HGB (seeds 0-4) + affectation sous quotas par coût ordinal Σ P(k)·\|k−c\| (linear_sum_assignment) au lieu du tri | Les trois gains sont validés séparément sur 3 à 5 seeds et viennent de mécanismes différents (information, variance, décision), donc ils devraient s'additionner : +0.005 + 0.0025 + 0.002 ≈ +0.009 attendu | **0.6187** (seeds 1-3 : 0.6198 / 0.6191 / 0.6172, vs 0.6089 pour v3, +0.010, positif sur les 3 seeds ; avec les mêmes probabilités, le tri-et-coupe donne 0.6168 / 0.6180 / 0.6132, donc l'affectation ordinale apporte +0.003) | |
 
 Hint 1 (16:20, noted 16:30): already used since v1 (15:35): relative features per user × sport (percentile rank and z-score of each workout within that person's workouts in that sport). Hints 2 and 3 not bought.
 
@@ -83,6 +85,44 @@ Protocole : `experiments.py` (team_pipeline.py n'est pas modifié pendant les te
   - Lecture : l'erreur vient surtout des petits groupes et des sports rares, où les features relatives et les voisins sont estimés sur peu de séances.
 - **Doublons et quasi-doublons.** 115 lignes du test appartiennent à un ensemble de lignes test identiques. Quasi-doublons (même user, sport, année, mois, jour, heure, et les 4 mesures à ±1 %) : 211 paires, dont 115 entièrement dans le train, avec 92.2 % d'accord des étiquettes (> 90 %), donc l'idée 4 est testée.
 - **Idées écartées par les règles du hackathon.** 15 (LightGBM lambdarank) et 18 (CatBoost ou LightGBM) : seuls les modèles scikit-learn sont autorisés, LightGBM et CatBoost ne sont pas dans scikit-learn. L'idée 18 est remplacée par une moyenne HGB + ExtraTrees (scikit-learn). L'affectation optimale (idée 1) est codée en numpy, sans scipy.
+
+## Round 3 bis (Johan, 16:20-17:00, after Hint 1): seven more ideas, none kept
+
+Hint 1 ("compare a workout with what that person usually does in that sport") is already what the pipeline does. Same protocol as round 2:
+nested OOF, duplicates then quotas, mean of CV seeds 1 / 2 / 3, keep only a mean gain >= +0.005. Reference re-run on this machine: 0.6106 / 0.6071 / 0.6036 -> **0.6071 +- 0.0029**.
+
+| # | Experiment | Seeds 1 / 2 / 3 (full) | Mean | Gain | Kept? |
+| --- | --- | --- | --- | --- | --- |
+| 6 | Ordinal decomposition: two binary HGB, P(y>=moderate) and P(y>=hard), ranking score = sum | 0.6067 / - / - | 0.6067 | -0.004 | no |
+| 7 | Soft vote 0.6 HGB + 0.4 RandomForest on the v2 features | 0.6089 / - / - | 0.6089 | -0.002 | no |
+| 8 | Same-slot neighbours: mean label of the person's labelled sessions in the same (year, month, weekday, hour), same (year, month, weekday), and any sport; plus near-duplicates (same slot, duration +-2 min, distance +-0.3 km). Motivation: two sessions in the same slot agree on the label 50 % of the time (baseline 33 %), and 2,778 test rows share a slot with a train row | 0.6081 / 0.6053 / 0.6077 | 0.6071 | +0.000 | no: raw argmax gains +0.005 but the quotas already recover that information |
+| 9 | Transductive self-training: pseudo-label validation + test with the quotas, then use the pseudo-labels as extra neighbours (never as training rows; each row excluded from its own pseudo-label) | 0.6038 / 0.6012 / 0.6030 | 0.6026 | -0.0045 | no: pseudo-labels (~62 % correct) add more noise than signal |
+| 10 | Sample weights 1/sqrt(group size) so small groups and rare sports (the worst-predicted) weigh more in training (on top of v3) | 0.5995 / 0.6028 / 0.6053 | 0.6025 | -0.0064 vs v3 0.6089 | no: the large groups carry the signal the model generalises from |
+| 11 | Pairwise ranker: HGB trained on same-group pairs (feature difference, target "i harder than j"), each test row scored by its mean win-probability against up to 60 known rows of its group (= estimated percentile), then quotas; alone and rank-averaged with the classifier | seed 1: alone 0.5967, mix 0.6082 (v3 0.6117) | | -0.015 / -0.0035 | no |
+
+| 12 | Per-group Spearman rho shrunk toward the global value with weight n/(n+30), so groups with few labels get a prior | 0.6071 / 0.6094 / 0.6065 | 0.6077 | -0.0012 | no |
+
+Reading after rounds 1-3: the model ranks sessions inside a group about as well as the available columns allow. The public gap to the top team (0.631) is 0.009, the gap to 0.66 would need information we do not have (the heart-rate value itself).
+
+## Round 4 (17:00-17:45): four parallel explorations on top of v3 (0.6089), same protocol, each by one agent
+
+| # | Experiment | Seeds 1 / 2 / 3 (full) | Mean | Gain | Seeds positive | Kept? |
+| --- | --- | --- | --- | --- | --- | --- |
+| 13 | Hierarchical label-free features for small groups: per-user (all sports) rank/z after per-sport median normalisation, global per-sport rank, shrunk z | best 0.6091 / 0.6087 / 0.6107 | 0.6095 | +0.0006 | 1/3 | no. Only 10 of 183 users practise 2 sports, so per-user = per-group for 95 % of rows; the small-group gap comes from label-based features estimated on few labels, not from relative features |
+| 14 | Seed-bagging: mean of 5 HGB with random_state 0..4 (early stopping makes the models differ) | 0.6125 / 0.6132 / 0.6089 | 0.6115 | +0.0026 | 3/3 | **yes** (variance reduction, cannot hurt in expectation) |
+| 15 | Quota assignment by linear_sum_assignment minimising expected ordinal error sum_k P(k)·\|k−c\| instead of sorting by expected label (same quotas). Max-likelihood cost (−log p): 0.6081; sort by logit difference: 0.6044 | 0.6131 / 0.6126 / 0.6080 (also seeds 4-5: +0.0036 / +0.0004) | 0.6112 | +0.0022 | 5/5 | **yes**. Gain comes from the moderate column: rows the model believes moderate stay in the middle tertile instead of being pushed out by uncertain rows |
+| 16 | New label-neighbour features (nested OOF): k-NN (k=5, 15) in the group's standardised feature space (z of speed, duration, gain, max speed, speed std) + mean distance; kernel-weighted residual (label − 2·speed rank) over time and over speed; label trend (ridge slope vs month, previous-3 vs next-3 months) | 0.6132 / 0.6168 / 0.6118 (seeds 4-5: 0.6118 / 0.6165) | 0.6139 | +0.0050 (+0.0035 over 5 seeds) | 5/5 | **yes** |
+| 17 | 2-seed averaging + ordinal assignment together (agent cross-check) | 0.6136 / 0.6147 / 0.6115 | 0.6132 | +0.0043 | 3/3 | effects roughly additive |
+
+## Confusion matrix, model v4 (HistGradientBoosting + v4 features + ordinal assignment, out-of-fold, seed 0, from the notebook)
+
+| | predicted easy | predicted moderate | predicted hard |
+| --- | --- | --- | --- |
+| **true easy** | 4955 | 1958 | 616 |
+| **true moderate** | 1833 | 3839 | 1931 |
+| **true hard** | 618 | 1822 | 5156 |
+
+Error analysis (17:45): versus v2, the moderate row gains +123 correct (3839 vs 3716) and both easy and hard lose fewer rows to the wrong neighbour; easy<->hard swaps stay rare (616 / 618, about 8 % of each class). The remaining errors are still between neighbouring tertiles: a workout close to a person's 33rd or 66th percentile sits on a boundary that the sensor value itself would settle, and we only estimate on which side it falls.
 
 ## Confusion matrix, model v2 (HistGradientBoosting + speed-kernel neighbours + per-group correlations, out-of-fold, seed 0)
 
